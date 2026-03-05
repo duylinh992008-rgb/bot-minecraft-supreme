@@ -4,14 +4,14 @@ const pvp = require('mineflayer-pvp').plugin;
 const collectBlock = require('mineflayer-collectblock').plugin;
 const http = require('http');
 
-// 6. duy trì render không ngủ quên
-http.createServer((req, res) => { res.write("Bot Ender Slayer Active!"); res.end(); }).listen(10000);
+// 6. chống render ngủ quên (giữ kết nối 24/7)
+http.createServer((req, res) => { res.write("Bot Optimized v13 Active!"); res.end(); }).listen(10000);
 
 const initbot = () => {
     const bot = mineflayer.createBot({
         host: 'nnlinh210.aternos.me',
         port: 24605,
-        username: 'bot_supreme_v12',
+        username: 'bot_supreme_v13',
         version: '1.20.4'
     });
 
@@ -20,75 +20,63 @@ const initbot = () => {
     bot.loadPlugin(collectBlock);
 
     bot.on('spawn', () => {
-        console.log('===> BOT V12: MUC TIEU PHA DAO GAME <===');
+        console.log('===> BOT V13: TOI UU HOA - CHONG LAG <===');
+        
+        // 9. tắt thông báo hệ thống để server không phải xử lý text thừa
+        bot.chat('/gamerule sendCommandFeedback false');
+        bot.settings.chat = 'commandsOnly';
+
         const mcData = require('minecraft-data')(bot.version);
         const movements = new Movements(bot, mcData);
         
-        // 1, 2 & 11. di chuyển mượt, vượt vật cản, không lag
+        // cấu hình di chuyển mượt nhưng không ngốn cpu
         movements.canSwim = true;
         movements.allowParkour = true;
-        movements.canDig = true; 
+        movements.canDig = false; // tạm tắt đào block để tránh lag chunk
         bot.pathfinder.setMovements(movements);
 
-        // 12. cơ chế tự chủ sinh tồn và tìm đường phá đảo
-        const autoProgression = () => {
+        // 1, 2, 11, 12. tự chủ di chuyển có khoảng nghỉ
+        const smartRoam = () => {
             if (bot.pvp.target) return;
-
-            // ưu tiên nhặt đồ rơi để nâng cấp sức mạnh
-            const drop = bot.nearestEntity(e => e.name === 'item');
-            if (drop && bot.entity.position.distanceTo(drop.position) < 15) {
-                bot.collectBlock.collect(drop).catch(() => {});
-                return;
-            }
-
-            // di chuyển hướng tới mục tiêu tiến hóa (random tọa độ rộng)
-            const rx = Math.floor(Math.random() * 100) - 50;
-            const rz = Math.floor(Math.random() * 100) - 50;
-            bot.pathfinder.setGoal(new goals.GoalNear(bot.entity.position.x + rx, bot.entity.position.y, bot.entity.position.z + rz, 5));
+            
+            // chỉ chọn điểm di chuyển trong bán kính nhỏ để tránh load chunk mới
+            const rx = Math.floor(Math.random() * 20) - 10;
+            const rz = Math.floor(Math.random() * 20) - 10;
+            bot.pathfinder.setGoal(new goals.GoalNear(bot.entity.position.x + rx, bot.entity.position.y, bot.entity.position.z + rz, 2));
         };
 
-        setInterval(() => { if (!bot.pathfinder.isMoving()) autoProgression(); }, 7000);
+        // tăng thời gian nghỉ giữa các lần di chuyển để server "thở"
+        setInterval(() => {
+            if (!bot.pathfinder.isMoving()) smartRoam();
+        }, 8000); 
 
-        // 9. giả lập xây dựng (đặt block khi bị hố)
-        bot.on('path_update', (r) => {
-            if (r.status === 'noPath' && bot.inventory.items().length > 0) {
-                const block = bot.inventory.items().find(i => i.name.includes('cobblestone') || i.name.includes('dirt'));
-                if (block) bot.chat("dang tu xay duong di tiep...");
+        // 13. mục tiêu phá đảo: chỉ quét tìm đồ rơi mỗi 20 giây một lần
+        setInterval(() => {
+            const item = bot.nearestEntity(e => e.name === 'item');
+            if (item && bot.entity.position.distanceTo(item.position) < 10) {
+                bot.collectBlock.collect(item).catch(() => {});
             }
-        });
+        }, 20000);
     });
 
-    // 3. phản công khi bị quái hoặc người tấn công
+    // 3. phản công khi bị tấn công (giữ nguyên độ nhạy)
     bot.on('attacked', (entity) => {
-        if (entity) {
-            bot.pvp.attack(entity);
-            if (entity.name === 'ender_dragon' || entity.name === 'enderman') {
-                bot.chat("dang tieu diet muc tieu quan trong!");
-            }
-        }
+        if (entity) bot.pvp.attack(entity);
     });
 
-    // 4. tự ăn hồi sức chủ động
+    // 4. tự ăn khi thực sự đói
     bot.on('health', () => {
-        if (bot.food < 15) {
-            const food = bot.inventory.items().find(i => ['cooked_beef', 'bread', 'golden_apple', 'apple'].includes(i.name));
+        if (bot.food < 14) {
+            const food = bot.inventory.items().find(i => ['cooked_beef', 'bread', 'apple'].includes(i.name));
             if (food) bot.eat(food).catch(() => {});
         }
     });
 
-    // 5, 7, 8. chống văng, chống lỗi, giữ kết nối
-    bot.on('death', () => {
-        bot.chat("se quay lai de pha dao game!");
-        bot.respawn();
-    });
-    
-    bot.on('end', () => {
-        console.log('mat ket noi, vao lai sau 5s...');
-        setTimeout(initbot, 5000);
-    });
+    // 5, 8. chống văng và tự vào lại sau 5s
+    bot.on('death', () => bot.respawn());
+    bot.on('end', () => setTimeout(initbot, 5000));
 
-    // chặn các lỗi vặt gây sập bot
-    bot.on('error', () => {});
+    bot.on('error', () => {}); // 7. chống lỗi vặt
 };
 
 initbot();
