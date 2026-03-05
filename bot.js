@@ -1,10 +1,11 @@
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
+const collectBlock = require('mineflayer-collectblock').plugin;
 const http = require('http');
 
-// 6. chống render ngủ quên (tạo server ảo)
-http.createServer((req, res) => { res.write("Bot Supreme v6 Online!"); res.end(); }).listen(10000);
+// 6. chống render ngủ quên
+http.createServer((req, res) => { res.write("Bot Survival V7 Online!"); res.end(); }).listen(10000);
 
 const initbot = () => {
     const bot = mineflayer.createBot({
@@ -16,65 +17,62 @@ const initbot = () => {
 
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(pvp);
+    bot.loadPlugin(collectBlock);
 
     bot.on('spawn', () => {
-        console.log('===> BOT V6: DI CHUYEN - CHIEN DAU - SPAM <===');
+        console.log('===> BOT V7: SINH TON & XAY DUNG <===');
         const mcData = require('minecraft-data')(bot.version);
         const movements = new Movements(bot, mcData);
         
-        // 2. vượt vật cản tự tìm đường
+        // 1 & 2. di chuyển mượt mà, vượt vật cản
         movements.canSwim = true;
         movements.allowParkour = true;
-        movements.canDig = false; // tránh tự đào hố chôn mình
+        movements.canDig = true; // bật lại để nó biết đào đất/đá khi sinh tồn
         bot.pathfinder.setMovements(movements);
 
-        // 1. di chuyển liên tục không ngừng nghỉ
-        const continuousMove = () => {
-            const rx = Math.floor(Math.random() * 20) - 10;
-            const rz = Math.floor(Math.random() * 20) - 10;
-            const goal = new goals.GoalNear(bot.entity.position.x + rx, bot.entity.position.y, bot.entity.position.z + rz, 1);
-            bot.pathfinder.setGoal(goal);
+        // hàm di chuyển liên tục không nghỉ
+        const roam = () => {
+            const rx = Math.floor(Math.random() * 30) - 15;
+            const rz = Math.floor(Math.random() * 30) - 15;
+            bot.pathfinder.setGoal(new goals.GoalNear(bot.entity.position.x + rx, bot.entity.position.y, bot.entity.position.z + rz, 1));
         };
-        
-        bot.on('goal_reached', () => {
-            setTimeout(continuousMove, 100); // vừa tới là đi tiếp ngay sau 0.1s
-        });
-        continuousMove(); // bắt đầu chạy ngay khi spawn
+        bot.on('goal_reached', () => setTimeout(roam, 100));
+        roam();
 
-        // 8. 3 giây chat ngẫu nhiên 1 lần
-        const messages = [
-            "tui là bot supreme nè", "di chuyển không mệt mỏi luôn", "ai đánh tui là tui vả lại đó",
-            "server này vui ghê", "đang đi dạo thôi mà", "đừng có đụng vào tui", "admin đâu ra đây chơi"
-        ];
+        // 8. 3 giây chat ngẫu nhiên
+        const talks = ["đang đi farm đồ nè", "ai xây nhà chung không?", "bot mà sinh tồn như thật luôn", "đừng phá nhà tui nha"];
+        setInterval(() => { bot.chat(talks[Math.floor(Math.random() * talks.length)]); }, 3000);
+
+        // 10. demo hành động sinh tồn (tự tìm gỗ nếu thấy gần đó)
         setInterval(() => {
-            bot.chat(messages[Math.floor(Math.random() * messages.length)]);
-        }, 3000);
+            const log = bot.findBlock({ matching: block => block.name.includes('log'), maxDistance: 10 });
+            if (log && !bot.pathfinder.isMoving()) {
+                bot.collectBlock.collect(log).catch(() => {});
+            }
+        }, 20000);
     });
 
-    // 3. đánh lại khi bị tấn công
-    bot.on('attacked', (entity) => {
-        if (entity) bot.pvp.attack(entity);
-    });
+    // 3. phản công gắt
+    bot.on('attacked', (entity) => { if (entity) bot.pvp.attack(entity); });
 
-    // 4. tự ăn để hồi sức
+    // 4. tự ăn hồi sức
     bot.on('health', () => {
         if (bot.food < 18) {
-            const food = bot.inventory.items().find(item => 
-                ['bread', 'cooked_beef', 'cooked_chicken', 'apple', 'carrot'].includes(item.name)
-            );
+            const food = bot.inventory.items().find(i => ['bread', 'cooked_beef', 'apple', 'carrot'].includes(i.name));
             if (food) bot.eat(food).catch(() => {});
         }
     });
 
-    // 5. tự vào lại sau 5 giây khi văng server
+    // 5 & 9. chống sập, tự vào lại sau 5s
     bot.on('death', () => bot.respawn());
     bot.on('end', () => {
-        console.log('văng server rồi, 5 giây sau vào lại nè...');
+        console.log('mất kết nối, đang hồi sinh sau 5s...');
         setTimeout(initbot, 5000);
     });
 
-    // 7. chống lỗi vặt: bỏ qua mấy cái lỗi lặt vặt trong game
-    bot.on('error', (err) => console.log('lỗi vặt nè nhưng hông sao: ' + err));
+    // 7. chống lỗi vặt
+    bot.on('error', (err) => {});
+    bot.on('kicked', (reason) => console.log('bị kick vì: ' + reason));
 };
 
 initbot();
